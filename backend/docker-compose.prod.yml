@@ -44,6 +44,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: monitor-backend
+    ports:
+      - "127.0.0.1:3000:3000"  # Expose only to localhost for Nginx
     environment:
       NODE_ENV: production
       PORT: 3000

@@ -77,16 +77,15 @@ jobs:
         run: |
           ssh root@${{ secrets.SERVER_IP }} "cd /opt/monitor-app/backend && chmod +x deploy.sh && ./deploy.sh"
 
-      - name: Setup Nginx configuration (first time only)
+      - name: Setup Nginx configuration
         run: |
           ssh root@${{ secrets.SERVER_IP }} "
-            if [ ! -f /etc/nginx/sites-available/monitor ]; then
-              cp /opt/monitor-app/backend/nginx/monitor.conf /etc/nginx/sites-available/monitor
-              ln -sf /etc/nginx/sites-available/monitor /etc/nginx/sites-enabled/monitor
+            # Always update nginx configuration
+            cp /opt/monitor-app/backend/nginx/monitor.conf /etc/nginx/sites-available/monitor
+            ln -sf /etc/nginx/sites-available/monitor /etc/nginx/sites-enabled/monitor
 
-              # Test nginx config
-              nginx -t && systemctl reload nginx || echo 'Nginx config will be applied after SSL setup'
-            fi
+            # Test and reload nginx config
+            nginx -t && systemctl reload nginx || echo 'Nginx config invalid - check logs'
           "
 
       - name: Deployment status
