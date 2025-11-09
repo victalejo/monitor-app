@@ -1,0 +1,25 @@
+========================================
+  COMANDO ÚNICO PARA COPIAR Y PEGAR
+========================================
+
+Copia EXACTAMENTE este comando (te pedirá la contraseña: Alejo2026)
+
+ssh root@147.93.184.62 "curl -sSL https://raw.githubusercontent.com/victalejo/monitor-app/main/complete-setup.sh | bash"
+
+========================================
+
+Esto hará TODO automáticamente:
+✓ Agregar SSH key
+✓ Instalar Docker
+✓ Instalar Docker Compose
+✓ Instalar Certbot
+✓ Configurar SSL
+✓ Configurar Nginx
+✓ Crear directorios
+✓ Crear redes Docker
+
+Después de que termine (2-3 minutos), ejecuta:
+
+cd v:\monitor-app && echo "# Deploy" >> README.md && git add README.md && git commit -m "Trigger deployment" && git push origin main
+
+========================================
