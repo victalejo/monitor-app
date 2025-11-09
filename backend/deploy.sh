@@ -15,10 +15,13 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 # Create backup directory if doesn't exist
 mkdir -p $BACKUP_DIR
 
-# Backup database
+# Backup database (skip if container doesn't exist - first deployment)
 echo "📦 Creating database backup..."
-docker exec monitor-postgres pg_dump -U monitor_user monitor_db > "$BACKUP_DIR/backup_$TIMESTAMP.sql"
-echo "✓ Database backed up to $BACKUP_DIR/backup_$TIMESTAMP.sql"
+if docker exec monitor-postgres pg_dump -U monitor_user monitor_db > "$BACKUP_DIR/backup_$TIMESTAMP.sql" 2>/dev/null; then
+    echo "✓ Database backed up to $BACKUP_DIR/backup_$TIMESTAMP.sql"
+else
+    echo "ℹ️  Skipping backup (first deployment or database not running)"
+fi
 
 # Pull latest code (already done by GitHub Actions)
 cd $PROJECT_DIR
