@@ -64,27 +64,16 @@ done
 
 if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     echo "⚠️  Timeout waiting for services to be healthy"
-    echo "📋 Container logs:"
-    docker logs monitor-backend --tail 50
-fi
-
-# Check health endpoint from inside the container
-echo "🏥 Checking health endpoint..."
-HEALTH_CHECK=$(docker exec monitor-backend node -e "require('http').get('http://localhost:3000/health', (res) => { let data = ''; res.on('data', chunk => data += chunk); res.on('end', () => console.log(data)) })" 2>/dev/null || echo "failed")
-
-if echo "$HEALTH_CHECK" | grep -q '"status":"ok"'; then
-    echo "✅ Backend is healthy!"
-    echo "Response: $HEALTH_CHECK"
-else
-    echo "❌ Backend health check failed!"
-    echo "Response: $HEALTH_CHECK"
     echo ""
-    echo "📋 Full backend logs:"
-    docker logs monitor-backend --tail 100
+    echo "📋 Backend container logs:"
+    docker logs monitor-backend --tail 50
+    echo ""
+    echo "📋 PostgreSQL container logs:"
+    docker logs monitor-postgres --tail 30
+    echo ""
 
     # Rollback
-    echo ""
-    echo "🔄 Rolling back to previous version..."
+    echo "🔄 Rolling back due to timeout..."
     docker-compose -f docker-compose.prod.yml down
 
     # Restore from backup if needed
@@ -92,6 +81,8 @@ else
 
     exit 1
 fi
+
+echo "✅ All services are healthy and running!"
 
 # Show running containers
 echo "📊 Running containers:"
