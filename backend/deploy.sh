@@ -68,17 +68,22 @@ if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     docker logs monitor-backend --tail 50
 fi
 
-# Check health endpoint
+# Check health endpoint from inside the container
 echo "🏥 Checking health endpoint..."
-HEALTH_CHECK=$(curl -s http://localhost:3000/health || echo "failed")
+HEALTH_CHECK=$(docker exec monitor-backend node -e "require('http').get('http://localhost:3000/health', (res) => { let data = ''; res.on('data', chunk => data += chunk); res.on('end', () => console.log(data)) })" 2>/dev/null || echo "failed")
 
 if echo "$HEALTH_CHECK" | grep -q '"status":"ok"'; then
     echo "✅ Backend is healthy!"
+    echo "Response: $HEALTH_CHECK"
 else
     echo "❌ Backend health check failed!"
     echo "Response: $HEALTH_CHECK"
+    echo ""
+    echo "📋 Full backend logs:"
+    docker logs monitor-backend --tail 100
 
     # Rollback
+    echo ""
     echo "🔄 Rolling back to previous version..."
     docker-compose -f docker-compose.prod.yml down
 
