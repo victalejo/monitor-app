@@ -1,0 +1,4 @@
+# This file ensures the data directory is tracked by git
+# The data directory is used for:
+# - buffer.json: Offline data buffer
+# - Any temporary agent data

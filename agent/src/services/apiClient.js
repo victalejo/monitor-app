@@ -8,6 +8,10 @@ class ApiClient {
     this.apiKey = config.apiKey;
     this.bufferFile = path.join(process.cwd(), 'data', 'buffer.json');
 
+    // Buffer limits
+    this.maxBufferSize = config.maxBufferSize || 1000; // Max items
+    this.maxBufferAge = config.maxBufferAge || 24 * 60 * 60 * 1000; // 24 hours in ms
+
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -26,9 +30,32 @@ class ApiClient {
       const data = await fs.readFile(this.bufferFile, 'utf-8');
       this.buffer = JSON.parse(data);
       console.log(`Loaded ${this.buffer.length} buffered items`);
+
+      // Clean old items after loading
+      this.cleanBuffer();
     } catch (error) {
       // File doesn't exist or is invalid, start with empty buffer
       this.buffer = [];
+    }
+  }
+
+  /**
+   * Remove old items from buffer and enforce size limits
+   */
+  cleanBuffer() {
+    const now = Date.now();
+
+    // Remove items older than maxBufferAge
+    this.buffer = this.buffer.filter(item => {
+      const itemAge = now - new Date(item.timestamp).getTime();
+      return itemAge < this.maxBufferAge;
+    });
+
+    // Enforce max buffer size (remove oldest items if over limit)
+    if (this.buffer.length > this.maxBufferSize) {
+      const removed = this.buffer.length - this.maxBufferSize;
+      this.buffer = this.buffer.slice(-this.maxBufferSize);
+      console.log(`⚠️ Buffer size limit reached. Removed ${removed} oldest items`);
     }
   }
 
@@ -45,6 +72,12 @@ class ApiClient {
     try {
       const response = await this.client.post('/api/agent/metrics', { metrics });
       console.log(`✓ Sent ${metrics.length} metrics to backend`);
+
+      // Try to flush buffer on successful connection
+      if (this.buffer.length > 0) {
+        await this.flushBuffer();
+      }
+
       return response.data;
     } catch (error) {
       console.error('Error sending metrics:', error.message);
@@ -55,6 +88,9 @@ class ApiClient {
         data: metrics,
         timestamp: new Date().toISOString(),
       });
+
+      // Clean buffer before saving
+      this.cleanBuffer();
       await this.saveBuffer();
 
       return null;
