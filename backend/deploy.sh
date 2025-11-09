@@ -41,10 +41,35 @@ docker-compose -f docker-compose.prod.yml up -d --build
 
 # Wait for services to be healthy
 echo "⏳ Waiting for services to be healthy..."
-sleep 10
+MAX_WAIT=120  # Maximum wait time in seconds
+WAIT_TIME=0
+INTERVAL=5
 
-# Check health
-echo "🏥 Checking health..."
+while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+    # Check if all containers are healthy
+    POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' monitor-postgres 2>/dev/null || echo "starting")
+    REDIS_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' monitor-redis 2>/dev/null || echo "starting")
+    BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' monitor-backend 2>/dev/null || echo "starting")
+
+    echo "  Postgres: $POSTGRES_HEALTH | Redis: $REDIS_HEALTH | Backend: $BACKEND_HEALTH"
+
+    if [ "$POSTGRES_HEALTH" = "healthy" ] && [ "$REDIS_HEALTH" = "healthy" ] && [ "$BACKEND_HEALTH" = "healthy" ]; then
+        echo "✓ All services are healthy!"
+        break
+    fi
+
+    sleep $INTERVAL
+    WAIT_TIME=$((WAIT_TIME + INTERVAL))
+done
+
+if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+    echo "⚠️  Timeout waiting for services to be healthy"
+    echo "📋 Container logs:"
+    docker logs monitor-backend --tail 50
+fi
+
+# Check health endpoint
+echo "🏥 Checking health endpoint..."
 HEALTH_CHECK=$(curl -s http://localhost:3000/health || echo "failed")
 
 if echo "$HEALTH_CHECK" | grep -q '"status":"ok"'; then
