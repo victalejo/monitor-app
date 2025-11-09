@@ -1,0 +1,103 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Create project directory on server
+        run: |
+          ssh root@${{ secrets.SERVER_IP }} "mkdir -p /opt/monitor-app/backend"
+
+      - name: Copy files to server
+        run: |
+          rsync -avz --delete \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude '.env' \
+            --exclude 'data' \
+            backend/ root@${{ secrets.SERVER_IP }}:/opt/monitor-app/backend/
+
+      - name: Create .env file on server
+        run: |
+          ssh root@${{ secrets.SERVER_IP }} "cat > /opt/monitor-app/backend/.env << 'EOF'
+          NODE_ENV=production
+          PORT=3000
+          HOST=0.0.0.0
+
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_POOL_MIN=2
+          DB_POOL_MAX=10
+
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRES_IN=7d
+          JWT_REFRESH_EXPIRES_IN=30d
+
+          CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+
+          RATE_LIMIT_WINDOW_MS=900000
+          RATE_LIMIT_MAX_REQUESTS=100
+          EOF"
+
+      - name: Setup Nginx proxy network
+        run: |
+          ssh root@${{ secrets.SERVER_IP }} "docker network create nginx-proxy || true"
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh root@${{ secrets.SERVER_IP }} "cd /opt/monitor-app/backend && chmod +x deploy.sh && ./deploy.sh"
+
+      - name: Setup Nginx configuration (first time only)
+        run: |
+          ssh root@${{ secrets.SERVER_IP }} "
+            if [ ! -f /etc/nginx/sites-available/monitor ]; then
+              cp /opt/monitor-app/backend/nginx/monitor.conf /etc/nginx/sites-available/monitor
+              ln -sf /etc/nginx/sites-available/monitor /etc/nginx/sites-enabled/monitor
+
+              # Test nginx config
+              nginx -t && systemctl reload nginx || echo 'Nginx config will be applied after SSL setup'
+            fi
+          "
+
+      - name: Deployment status
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "🌐 Backend URL: https://monitoreo.victalejo.dev"
+          echo "🏥 Health check: https://monitoreo.victalejo.dev/health"
+
+      - name: Deployment failed
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          exit 1
